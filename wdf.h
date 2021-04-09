@@ -363,6 +363,7 @@ protected:
 
 class Parallel : public wdfThreePortAdaptor
 {
+public:
 	Parallel(wdfNode* leftPort, wdfNode* rightPort) : wdfThreePortAdaptor(leftPort, rightPort, "Parallel")
 	{
 		calcImpedance();
@@ -376,28 +377,27 @@ class Parallel : public wdfThreePortAdaptor
 		const float R_right = rightPort->Rp;
 
 		Rp = (R_left * R_right) / (R_left + R_right);
-		gamma = Rp / R_right;
-		b_T = -1.0 * gamma * (leftPort->a - a);
+		gammaLeft = Rp / R_left;
+		gammaRight = Rp / R_right;
+
 	}
 
 	float calcReflectedWave()
 	{
-		b = b_T + leftPort->calcReflectedWave();
+		b = gammaLeft * leftPort->calcReflectedWave() + gammaRight * rightPort->calcReflectedWave();
 		return b;
 	}
 
 	void calcIncidentWave(float downWave)
 	{
-		float left_b = b_T + downWave;
-		leftPort->calcIncidentWave(left_b);
-		rightPort->calcIncidentWave(left_b + leftPort->a - rightPort->a);
+		leftPort->calcIncidentWave(downWave + (rightPort->b - leftPort->b) * gammaRight);
+		rightPort->calcIncidentWave(downWave + (rightPort->b - leftPort->b) * -gammaLeft);
 
 		a = downWave;
 	}
 
 private:
-	float b_T; //scattering parameter based on Fettweis
-	float gamma;
+	float gammaLeft, gammaRight;
 };
 
 class Series : public wdfThreePortAdaptor
@@ -416,25 +416,84 @@ public:
 		const float R_right = rightPort->Rp;
 
 		Rp = R_left + R_right;
-		gamma = R_right / Rp;
+		gammaLeft = R_left / Rp;
+		gammaRight = R_right / Rp;
 	}
 
 	float calcReflectedWave()
 	{
+		//port->calcreflectedwave = port->a
 		b = -1.0 * (leftPort->calcReflectedWave() + rightPort->calcReflectedWave());
 		return b;
 	}
 
 	void calcIncidentWave(float downWave)
 	{
-		float right_b = rightPort->a - gamma * (leftPort->a + rightPort->a + downWave);
-		rightPort->calcIncidentWave(right_b);
-		leftPort->calcIncidentWave(-1.0 * (right_b + downWave));
+		//port->incident = port->b
+		leftPort->calcIncidentWave(leftPort->b - gammaLeft * (downWave + leftPort->b + rightPort->b));
+		rightPort->calcIncidentWave(rightPort->b - gammaRight * (downWave + leftPort->b + rightPort->b));
 
 		a = downWave;
 	}
 private:
-	float gamma;
+	float gammaLeft, gammaRight;
+};
+
+class wdfRtypeAdaptor : public wdfNode
+{
+public:
+	wdfRtypeAdaptor(int numPorts, wdfNode** downPorts, float** S_matrix) : wdfNode("R-type Adaptor")
+	{
+		Rp = new float(numPorts);
+		for (int i = 0; i < numPorts; i++)
+		{
+			downPorts[i]->connectToNode(this);
+		}
+		calcImpedance();
+	}
+
+	void calcImpedance()
+	{
+		for (int i = 0; i < numPorts; i++)
+		{
+			Rp[i] = downPorts[i]->Rp;
+		}
+	}
+
+	void calcIncidentWave(float downWave)
+	{
+		float a_[numPorts];
+		float b_[numPorts];
+		for (int i = 0; i < numPorts; i++)
+		{
+			a_[i] = downPorts[i]->b;
+		}
+
+		matmmltf(b_, S_matrix, a_, numPorts, numPorts, 1);
+
+		for (int i = 0; i < numPorts; i++)
+		{
+			downPorts[i]->calcIncidentWave(b_[i]);
+		}
+		a = downWave;
+	}
+
+	float calcReflectedWave()
+	{
+		float* S_0 = S_matrix[0];
+
+		for (int i = 0; i < numPorts; i++)
+		{
+			b += S_0[i] * downPorts[i]->calcReflectedWave();
+		}
+
+		return b;
+	}
+protected:
+	int numPorts; //number of ports connected to RtypeAdaptor
+	float* Rp;
+	float** S_matrix; //square matrix representing S
+	wdfNode** downPorts; //array of ports connected to RtypeAdaptor
 };
 
 
