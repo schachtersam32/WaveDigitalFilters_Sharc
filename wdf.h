@@ -10,6 +10,7 @@
 
 #include <matrix.h>
 #include <vector>
+#include "wdf_utils.h"
 #include <stddef.h>
 #include <stdlib.h>
 
@@ -445,6 +446,8 @@ public:
 	wdfRtypeAdaptor(int numPorts, wdfNode** downPorts, float** S_matrix) : wdfNode("R-type Adaptor")
 	{
 		Rp = new float(numPorts);
+		a_ = new float(numPorts);
+		b_ = new float(numPorts);
 		for (int i = 0; i < numPorts; i++)
 		{
 			downPorts[i]->connectToNode(this);
@@ -462,8 +465,6 @@ public:
 
 	void calcIncidentWave(float downWave)
 	{
-		float a_[numPorts];
-		float b_[numPorts];
 		for (int i = 0; i < numPorts; i++)
 		{
 			a_[i] = downPorts[i]->b;
@@ -494,6 +495,57 @@ protected:
 	float* Rp;
 	float** S_matrix; //square matrix representing S
 	wdfNode** downPorts; //array of ports connected to RtypeAdaptor
+	float* a_; //temp matrix of inputs to Rport
+	float* b_; //temp matrix of outputs from Rport
+};
+
+class Diode : public wdfNode
+{
+public:
+	//Is: reverse saturation current
+	//Vt: thermal voltage
+	Diode(float Is, float Vt) : wdfNode("Diode"), Is(Is), Vt(Vt) {}
+	~Diode() {}
+
+	void calcImpedance() {}
+
+	void calcIncidentWave(float downWave)
+	{
+		a = downWave;
+	}
+
+	float calcReflectedWave()
+	{
+		b = a + 2 * connectedNode->Rp * Is - 2 * Vt * omega4(log(connectedNode->Rp * Is / Vt) + (a + connectedNode->Rp * Is) / Vt);
+		return b;
+	}
+
+private:
+	const float Is;
+	const float Vt; 
+};
+
+class DiodePair : public wdfNode
+{
+public:
+	DiodePair(float Is, float Vt) : wdfNode("DiodePair"), Is(Is), Vt(Vt) {}
+	~DiodePair() {}
+
+	void calcImpedance() {}
+
+	void calcIncidentWave(float downWave)
+	{
+		a = downWave;
+	}
+
+	float calcReflectedWave()
+	{
+		float lambda = static_cast<float>(signum(a));
+		b = a + 2 * lambda * (connectedNode->Rp * Is - Vt * omega4(logf(connectedNode->Rp * Is / Vt) + (lambda * a + connectedNode->Rp * Is) / Vt));
+	}
+private:
+	const float Is;
+	const float Vt;
 };
 
 
