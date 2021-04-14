@@ -345,6 +345,81 @@ private:
 	wdfNode* port;
 };
 
+class IdealTransformer : public wdfNode
+{
+public:
+	IdealTransformer(wdfNode* port, float turnRatio) : wdfNode("IdealTransformer"), port(port), turnRatio(turnRatio)
+	{
+		port->connectToNode(this);
+		calcImpedance();
+	}
+
+	void setTurnRatio(float n)
+	{
+		turnRatio = n;
+	}
+
+	void calcImpedance()
+	{
+		Rp = turnRatio * turnRatio * port->Rp;
+	}
+
+	void calcIncidentWave(float downWave)
+	{
+		a = downWave;
+		port->calcIncidentWave(a/turnRatio);
+	}
+
+	float calcReflectedWave()
+	{
+		b = port->calcReflectedWave()*turnRatio;
+		return b;
+	}
+
+private:
+	float turnRatio;
+	wdfNode* port;
+
+};
+
+class ActiveTransformer : public wdfNode
+{
+public:
+	ActiveTransformer(wdfNode* port, float turn1, float turn2) : wdfNode("IdealTransformer"), port(port), turn1(turn1), turn2(turn2)
+	{
+		port->connectToNode(this);
+		calcImpedance();
+	}
+
+	void setTurnRatios(float n1, float n2)
+	{
+		turn1 = n1;
+		turn2 = n2;
+	}
+
+	void calcImpedance()
+	{
+		Rp = turn1 * turn2 * port->Rp;
+	}
+
+	void calcIncidentWave(float downWave)
+	{
+		a = downWave;
+		port->calcIncidentWave(a / turn1);
+	}
+
+	float calcReflectedWave()
+	{
+		b = port->calcReflectedWave() * turn1;
+		return b;
+	}
+
+private:
+	float turn1, turn2;
+	wdfNode* port;
+
+};
+
 class wdfThreePortAdaptor : public wdfNode
 {
 public:
@@ -470,7 +545,8 @@ public:
 			a_[i] = downPorts[i]->b;
 		}
 
-		matmmltf(b_, S_matrix, a_, numPorts, numPorts, 1);
+		//matmmltf(b_, S_matrix, a_, numPorts, numPorts, 1);
+		RtypeScatter(numPorts, S_matrix, a_, b_);
 
 		for (int i = 0; i < numPorts; i++)
 		{

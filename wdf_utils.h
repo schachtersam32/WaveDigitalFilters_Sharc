@@ -104,6 +104,22 @@ inline float omega4(float x)
 	return y - (y - exp_approx(x - y) / (y + 1.0));
 }
 
+// Matrix * vector multiplication function for R-type adaptor
+inline void RtypeScatter(int dim, float** S_, float* a_, float* b_)
+{
+	// input matrix (S) of size dim x dim
+	// input vector (a) of size 1 x dim
+	// output vector (b) of size 1 x dim
+
+	for (int r = 0; r < dim; r++)
+	{
+		for (int c = 0; c < dim; c++)
+		{
+			b_[c] += S_[c][r] * a_[r];
+		}
+	}
+}
+
 
 
 #endif /* WDF_UTILS_H_ */
