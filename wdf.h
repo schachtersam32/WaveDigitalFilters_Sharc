@@ -219,7 +219,7 @@ private:
 class IdealVoltageSource : public wdfNode
 {
 public:
-	IdealVoltageSource(float Vs) : wdfNode("IdealVoltageSource")
+	IdealVoltageSource() : wdfNode("IdealVoltageSource")
 	{
 		calcImpedance();
 	}
@@ -238,7 +238,7 @@ public:
 
 	float calcReflectedWave()
 	{
-		b = 2 * Vs - a;
+		b = 2.0 * Vs - a;
 		return b;
 	}
 
@@ -249,7 +249,10 @@ private:
 class ResistiveVoltageSource : public wdfNode
 {
 public:
-	ResistiveVoltageSource(float R) : wdfNode("ResistiveVoltageSource"), Vs(0.0), R_ser(1.0) {}
+	ResistiveVoltageSource(float R) : wdfNode("ResistiveVoltageSource"), Vs(0.0), R_ser(R)
+	{
+		calcImpedance();
+	}
 
 	void calcImpedance()
 	{
@@ -283,6 +286,83 @@ public:
 private:
 	float Vs;
 	float R_ser;
+};
+
+class IdealCurrentSource : public wdfNode
+{
+public:
+	IdealCurrentSource() : wdfNode("IdealCurrentSource"), Is(0.0)
+	{
+		calcImpedance();
+	}
+
+	~IdealCurrentSource() {}
+
+	void calcImpedance() {}
+
+	void setCurrent(float I)
+	{
+		Is = I;
+	}
+
+	void calcIncidentWave(float downWave)
+	{
+		a = downWave;
+	}
+
+	float calcReflectedWave()
+	{
+		b = 2.0 * connectedNode->Rp * Is + a;
+		return b;
+	}
+
+private:
+	float Is;
+};
+
+
+class ResistiveCurrentSource : public wdfNode
+{
+public:
+	ResistiveCurrentSource(float R) : wdfNode("ResistiveCurrentSource"), Is(0.0), R_par(R)
+	{
+		calcImpedance();
+	}
+
+	~ResistiveCurrentSource() {}
+
+	void calcImpedance()
+	{
+		Rp = R_par;
+	}
+
+	void setResistance(float R)
+	{
+		if (R == R_par) return;
+
+		R_par = R;
+		propagateImpedance();
+	}
+
+	void setCurrent(float I)
+	{
+		Is = I;
+	}
+
+	void calcIncidentWave(float downWave)
+	{
+		a = downWave;
+	}
+
+	float calcReflectedWave()
+	{
+		b = 2 * Rp * Is;
+		return b;
+	}
+
+private:
+	float Is;
+	float R_par;
 };
 
 class Switch : public wdfNode
@@ -367,12 +447,12 @@ public:
 	void calcIncidentWave(float downWave)
 	{
 		a = downWave;
-		port->calcIncidentWave(a/turnRatio);
+		port->calcIncidentWave(a / turnRatio);
 	}
 
 	float calcReflectedWave()
 	{
-		b = port->calcReflectedWave()*turnRatio;
+		b = port->calcReflectedWave() * turnRatio;
 		return b;
 	}
 
@@ -515,10 +595,10 @@ private:
 	float gammaLeft, gammaRight;
 };
 
-class wdfRtypeAdaptor : public wdfNode
+class RtypeAdaptor : public wdfNode
 {
 public:
-	wdfRtypeAdaptor(int numPorts, wdfNode** downPorts, float** S_matrix) : wdfNode("R-type Adaptor")
+	RtypeAdaptor(int numPorts, wdfNode** downPorts, float** S_matrix) : wdfNode("R-type Adaptor")
 	{
 		Rp = new float(numPorts);
 		a_ = new float(numPorts);
@@ -580,7 +660,7 @@ class Diode : public wdfNode
 public:
 	//Is: reverse saturation current
 	//Vt: thermal voltage
-	Diode(float Is, float Vt) : wdfNode("Diode"), Is(Is), Vt(Vt) {}
+	Diode(DiodeModel d) : wdfNode("Diode"), d(d) {}
 	~Diode() {}
 
 	void calcImpedance() {}
@@ -592,19 +672,18 @@ public:
 
 	float calcReflectedWave()
 	{
-		b = a + 2 * connectedNode->Rp * Is - 2 * Vt * omega4(log(connectedNode->Rp * Is / Vt) + (a + connectedNode->Rp * Is) / Vt);
+		b = a + 2 * connectedNode->Rp * d.Is - 2 * d.nD * d.Vt * omega4(logf((connectedNode->Rp * d.Is) / (d.nD * d.Vt)) + (a + connectedNode->Rp * d.Is) / (d.nD * d.Vt));
 		return b;
 	}
 
 private:
-	const float Is;
-	const float Vt; 
+	const DiodeModel d; // get diode model from wdf_utils
 };
 
 class DiodePair : public wdfNode
 {
 public:
-	DiodePair(float Is, float Vt) : wdfNode("DiodePair"), Is(Is), Vt(Vt) {}
+	DiodePair(DiodeModel d) : wdfNode("DiodePair"), d(d) {}
 	~DiodePair() {}
 
 	void calcImpedance() {}
@@ -616,12 +695,13 @@ public:
 
 	float calcReflectedWave()
 	{
-		float lambda = static_cast<float>(signum(a));
-		b = a + 2 * lambda * (connectedNode->Rp * Is - Vt * omega4(logf(connectedNode->Rp * Is / Vt) + (lambda * a + connectedNode->Rp * Is) / Vt));
+		float abs_a = fabsf(a);
+		float sig = static_cast<float>(signum(a));
+		b = sig * (abs_a + 2 * connectedNode->Rp * d.Is - 2 * d.nD * d.Vt * omega4(logf(connectedNode->Rp * d.Is / (d.nD * d.Vt)) + (abs_a + connectedNode->Rp * d.Is) / (d.nD * d.Vt)));
+		return b;
 	}
 private:
-	const float Is;
-	const float Vt;
+	const DiodeModel d;
 };
 
 

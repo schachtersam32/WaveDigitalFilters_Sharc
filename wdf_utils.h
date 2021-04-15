@@ -10,6 +10,18 @@
 
 #include <math.h>
 
+ // define several diode models
+typedef struct
+{
+	float Vt;
+	float Is;
+	float nD;
+} DiodeModel;
+
+DiodeModel d_1N4148 = { 25.85e-3, 2.52e-9, 1.0 };
+DiodeModel d_NSCW100 = { 25.85e-3, 16.88e-9, 9.626 };
+
+
 //signum function - determines sign of input
 inline int signum(float x)
 {
@@ -60,7 +72,7 @@ inline float exp_approx(float x)
 
 	int32_t xi = static_cast<int32_t>(x);
 	int32_t l = x < 0.0f ? xi - 1 : xi;
-	float f = x - static_cast<float> l;
+	float f = x - static_cast<float>(l);
 	v.i = (l + 127) << 23;
 
 	return v.f * pow2_approx(f);
