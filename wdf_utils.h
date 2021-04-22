@@ -9,6 +9,14 @@
 #define WDF_UTILS_H_
 
 #include <math.h>
+#define ADAA_THRESHOLD 10e-12
+#define FLT_MIN_PLUS 1.175494351e-38
+#define FLT_MIN_MINUS - 1.175494351e-38
+
+inline bool checkUnderflow(float val)
+{
+	return ((val < FLT_MIN_PLUS) && (val > FLT_MIN_MINUS));
+}
 
  // define several diode models
 typedef struct
@@ -114,6 +122,74 @@ inline float omega4(float x)
 {
 	const float y = omega3(x);
 	return y - (y - exp_approx(x - y) / (y + 1.0));
+}
+
+inline float ADAA_phi(float a, DiodeModel d, float Rp)
+{
+	return (a + Rp * d.Is) / (d.Vt) + logf((Rp * d.Is) / d.Vt);
+}
+
+inline float ADAA_SingleDiode_F1(float a, DiodeModel d, float Rp)
+{
+	return (a * a) / 2.0 + 2.0 * Rp * d.Is * a - (d.Vt * d.Vt) * omega4(ADAA_phi(a, d, Rp)) + (2.0 * omega4(ADAA_phi(a, d, Rp)));
+}
+
+inline float ADAA_1stOrder_SingleDiode(float a, float a_1, DiodeModel d, float Rp)
+{
+	bool thresh = checkUnderflow(a - a_1);
+	float f_a;
+	if(!thresh)
+	{
+		f_a = ADAA_SingleDiode_F1(((a + a_1) / 2.0),d,Rp);
+	}
+	else
+	{
+		f_a = (ADAA_SingleDiode_F1(a, d, Rp) - ADAA_SingleDiode_F1(a_1, d, Rp)) / (a - a_1);
+	}
+	return f_a;
+}
+
+inline float ADAA_SingleDiode_F2(float a, DiodeModel d, float Rp)
+{
+	return (a * a * a) / 6.0 + Rp * d.Is * (a * a) - (d.Vt * d.Vt * d.Vt) / 6.0 * omega4(ADAA_phi(a, d, Rp)) + (12.0 + 9.0 * omega4(ADAA_phi(a, d, Rp)) + 2.0 * omega4(ADAA_phi(a, d, Rp) * ADAA_phi(a, d, Rp)));
+}
+
+inline float ADAA_2ndOrder_SingleDiode(float a, float a_1, float a_2, DiodeModel d, float Rp)
+{
+	return 2.0 / (a - a_2) * ((ADAA_SingleDiode_F2(a, d, Rp) - ADAA_SingleDiode_F2(a_1, d, Rp)) / (a - a_1) - (ADAA_SingleDiode_F2(a_1, d, Rp) - ADAA_SingleDiode_F2(a_2, d, Rp)) / (a_1 - a_2));
+}
+
+inline float ADAA_DiodePair_F1(float a, DiodeModel d, float Rp)
+{
+	float abs_a = fabsf(a);
+	return (a * a) / 2.0 + 2.0 * Rp * d.Is * abs_a - (d.Vt * d.Vt) * omega4(ADAA_phi(abs_a, d, Rp)) + (2.0 * omega4(ADAA_phi(abs_a, d, Rp)));
+}
+
+inline float ADAA_DiodePair_F2(float a, float a_1, DiodeModel d, float Rp)
+{
+	bool thresh = checkUnderflow(a - a_1);
+	float f_a;
+	if (thresh)
+	{
+		f_a = ADAA_DiodePair_F1(((a + a_1) / 2.0), d, Rp);
+	}
+	else
+	{
+		f_a = (ADAA_DiodePair_F1(a, d, Rp) - ADAA_DiodePair_F1(a_1, d, Rp)) / (a - a_1);
+	}
+	return f_a;
+}
+
+inline float ADAA_DiodePair_F2(float a, DiodeModel d, float Rp)
+{
+	float abs_a = fabsf(a);
+	float sgn_a = static_cast<float>(signum(a));
+	return (a * a * a) / 6.0 + Rp * d.Is * (a * a) * sgn_a - (d.Vt * d.Vt * d.Vt * sgn_a) / 6.0 * omega4(ADAA_phi(abs_a, d, Rp)) + (12.0 + 9.0 * omega4(ADAA_phi(abs_a, d, Rp)) + 2.0 * omega4(ADAA_phi(abs_a, d, Rp) * ADAA_phi(abs_a, d, Rp)));
+}
+
+inline float ADAA_2ndOrder_DiodePair(float a, float a_1, float a_2, DiodeModel d, float Rp)
+{
+	return 2.0 / (a - a_2) * ((ADAA_DiodePair_F2(a, d, Rp) - ADAA_DiodePair_F2(a_1, d, Rp)) / (a - a_1) - (ADAA_DiodePair_F2(a_1, d, Rp) - ADAA_DiodePair_F2(a_2, d, Rp)) / (a_1 - a_2));
 }
 
 // Matrix * vector multiplication function for R-type adaptor

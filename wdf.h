@@ -76,6 +76,7 @@ public:
 	virtual ~wdfTree() {}
 
 	virtual float processSample(float inSamp) = 0; //processes tree sample by sample
+	virtual void setSMatrixData() = 0;
 
 	void setSampleRate(float SR) { sr = SR; } //set system samplerate
 	void setAlpha(float a) { alpha = a; } //set circuit alpha parameter
@@ -425,6 +426,38 @@ private:
 	wdfNode* port;
 };
 
+class TwoPortParallel : public wdfNode
+{
+public:
+	TwoPortParallel(wdfNode* port) : wdfNode("TwoPortParallel"), port(port)
+	{
+		port->connectToNode(this);
+		calcImpedance();
+	}
+
+	~TwoPortParallel() {}
+
+	void calcImpedance()
+	{
+		Rp = port->Rp;
+	}
+
+	void calcIncidentWave(float downWave)
+	{
+		a = downWave;
+		port->calcIncidentWave(a);
+	}
+
+	float calcReflectedWave()
+	{
+		b = port->calcReflectedWave();
+		return b;
+	}
+
+private:
+	wdfNode* port;
+};
+
 class IdealTransformer : public wdfNode
 {
 public:
@@ -499,6 +532,8 @@ private:
 	wdfNode* port;
 
 };
+
+
 
 class wdfThreePortAdaptor : public wdfNode
 {
@@ -598,7 +633,7 @@ private:
 class RtypeAdaptor : public wdfNode
 {
 public:
-	RtypeAdaptor(int numPorts, wdfNode** downPorts, float** S_matrix) : wdfNode("R-type Adaptor")
+	RtypeAdaptor(int numPorts, wdfNode** downPorts) : wdfNode("R-type Adaptor")
 	{
 		Rp = new float(numPorts);
 		a_ = new float(numPorts);
@@ -616,6 +651,11 @@ public:
 		{
 			Rp[i] = downPorts[i]->Rp;
 		}
+	}
+
+	void setSMatrixData(float** S_)
+	{
+		S_matrix = S_;
 	}
 
 	void calcIncidentWave(float downWave)
@@ -672,7 +712,7 @@ public:
 
 	float calcReflectedWave()
 	{
-		b = a + 2 * connectedNode->Rp * d.Is - 2 * d.nD * d.Vt * omega4(logf((connectedNode->Rp * d.Is) / (d.nD * d.Vt)) + (a + connectedNode->Rp * d.Is) / (d.nD * d.Vt));
+		b = a + 2 * connectedNode->Rp * d.Is - 2 * d.Vt * omega4(logf((connectedNode->Rp * d.Is) / d.Vt) + (a + connectedNode->Rp * d.Is) / d.Vt);
 		return b;
 	}
 
@@ -695,9 +735,8 @@ public:
 
 	float calcReflectedWave()
 	{
-		float abs_a = fabsf(a);
-		float sig = static_cast<float>(signum(a));
-		b = sig * (abs_a + 2 * connectedNode->Rp * d.Is - 2 * d.nD * d.Vt * omega4(logf(connectedNode->Rp * d.Is / (d.nD * d.Vt)) + (abs_a + connectedNode->Rp * d.Is) / (d.nD * d.Vt)));
+		float lambda = static_cast<float>(signum(a));
+		b = a + 2 * lambda * (connectedNode->Rp * d.Is - d.Vt * omega4(logf(connectedNode->Rp * d.Is / d.Vt) + (lambda * a + connectedNode->Rp * d.Is) / d.Vt));
 		return b;
 	}
 private:
