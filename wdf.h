@@ -76,7 +76,7 @@ public:
 	virtual ~wdfTree() {}
 
 	virtual float processSample(float inSamp) = 0; //processes tree sample by sample
-	virtual void setSMatrixData() = 0;
+	virtual void setSMatrixData() {}
 
 	void setSampleRate(float SR) { sr = SR; } //set system samplerate
 	void setAlpha(float a) { alpha = a; } //set circuit alpha parameter
@@ -123,11 +123,46 @@ private:
 	float R_val;
 };
 
+class RootResistor : public wdfNode
+{
+public:
+	RootResistor(float R) : wdfNode("RootResistor"), R_val(R)
+	{
+		calcImpedance();
+	}
+
+	~RootResistor() {}
+
+	void setResistance(float R)
+	{
+		if (R == R_val)
+			return;
+		R_val = R;
+		propagateImpedance();
+	}
+
+	void calcImpedance() {}
+
+	void calcIncidentWave(float downWave)
+	{
+		a = downWave;
+	}
+
+	float calcReflectedWave()
+	{
+		b = (R_val - Rp) / (R_val + Rp);
+		return b;
+	}
+
+private:
+	float R_val;
+};
+
 class Capacitor : public wdfNode
 {
 public:
 	Capacitor(float C, float fs, float alpha) : wdfNode("Capacitor"),
-		C_val(C), prev_a(0.0), prev_b(0.0), alpha(alpha), fs(fs), b_coef((1 - alpha) / 2.0), a_coef((1 + alpha) / 2.0)
+		C_val(C), prev_a(0.0), alpha(alpha), fs(fs), b_coef((1 - alpha) / 2.0), a_coef((1 + alpha) / 2.0)
 	{
 		calcImpedance();
 	}
@@ -162,10 +197,65 @@ public:
 
 private:
 	float C_val;
-	float prev_a, prev_b; //storage values for incident and reflected waves
+	float prev_a; //storage values for incident and reflected waves
 	float fs; // sample rate needed for adaptation
 	float alpha; //alpha parameter needed for discretization
 	const float b_coef;
+	const float a_coef;
+};
+
+class RootCapacitor : public wdfNode
+{
+public:
+	RootCapacitor(float C, float fs, float alpha) : wdfNode("RootCapacitor"),
+		C_val(C), prev_a(0.0), alpha(alpha), fs(fs)
+	{
+		calcImpedance();
+		calcCoefficients();
+	}
+
+	~RootCapacitor() {}
+
+	void setCapacitance(float C)
+	{
+		if (C == C_val)
+			return;
+
+		C_val = C;
+		//propagateImpedance();
+		calcCoefficients();
+	}
+
+	void calcCoefficients()
+	{
+		float T = 1.0 / fs;
+		float den = 1.0 / (Rp * C_val * (1 + alpha) + T);
+		b_coef = (Rp * C_val * (1 + alpha) - T * alpha) * den;
+		a_coef = (-Rp * C_val * (1 + alpha) - T) * den;
+		a1_coef = (Rp * C_val * (1 + alpha) + T * alpha) * den;
+	}
+
+	void calcImpedance() {}
+
+	void calcIncidentWave(float downSamp)
+	{
+		a = downSamp;
+		prev_a = a;
+	}
+
+	float calcReflectedWave()
+	{
+		b = b_coef * b + a1_coef * prev_a + a_coef * a;
+		return b;
+	}
+
+private:
+	float C_val;
+	float prev_a; //storage values for incident and reflected waves
+	float fs; // sample rate needed for adaptation
+	float alpha; //alpha parameter needed for discretization
+	const float b_coef;
+	const float a1_coef;
 	const float a_coef;
 };
 
@@ -173,7 +263,7 @@ class Inductor : public wdfNode
 {
 public:
 	Inductor(float L, float fs, float alpha) : wdfNode("Inductor"),
-		L_val(L), prev_a(0.0), prev_b(0.0), alpha(alpha), fs(fs), b_coef((1 - alpha) / 2.0), a_coef((1 + alpha) / 2.0)
+		L_val(L), prev_a(0.0), alpha(alpha), fs(fs), b_coef((1 - alpha) / 2.0), a_coef((1 + alpha) / 2.0)
 	{
 		calcImpedance();
 	}
@@ -214,6 +304,61 @@ private:
 	float fs; // sample rate needed for adaptation
 	float alpha; //alpha parameter needed for discretization
 	const float b_coef;
+	const float a_coef;
+};
+
+class RootInductor : public wdfNode
+{
+public:
+	RootInductor(float L, float fs, float alpha) : wdfNode("Inductor"),
+		L_val(L), prev_a(0.0), alpha(alpha), fs(fs)
+	{
+		calcImpedance();
+		calcCoefficients();
+	}
+
+	~RootInductor() {}
+
+	void setInductance(float L)
+	{
+		if (L == L_val)
+			return;
+
+		L_val = L;
+		propagateImpedance();
+	}
+
+	void calcCoefficients()
+	{
+		float T = 1.0 / fs;
+		float den = 1.0 / (Rp * T + L_val * (1 + alpha));
+		b_coef = L_val * (1 + alpha) - Rp * T * alpha;
+		a1_coef = L_val * (1 + alpha) - Rp * T;
+		a_coef = L_val * (1 + alpha) + Rp * T * alpha;
+	}
+
+	void calcImpedance() {}
+
+	void calcIncidentWave(float downSamp)
+	{
+		a = downSamp;
+		prev_a = a;
+	}
+
+	float calcReflectedWave()
+	{
+		b = b_coef * b + a1_coef * prev_a + a_coef*a;
+		return b;
+	}
+
+
+private:
+	float L_val;
+	float prev_a; //storage values for incident and reflected waves
+	float fs; // sample rate needed for adaptation
+	float alpha; //alpha parameter needed for discretization
+	const float b_coef;
+	const float a1_coef;
 	const float a_coef;
 };
 
@@ -638,6 +783,7 @@ public:
 		Rp = new float(numPorts);
 		a_ = new float(numPorts);
 		b_ = new float(numPorts);
+		S_matrix = new float[numPorts][numPorts];
 		for (int i = 0; i < numPorts; i++)
 		{
 			downPorts[i]->connectToNode(this);
@@ -656,6 +802,11 @@ public:
 	void setSMatrixData(float** S_)
 	{
 		S_matrix = S_;
+	}
+
+	float** getSMatrixData()
+	{
+		return S_matrix;
 	}
 
 	void calcIncidentWave(float downWave)
@@ -688,7 +839,7 @@ public:
 	}
 protected:
 	int numPorts; //number of ports connected to RtypeAdaptor
-	float* Rp;
+	float* Rp; // array of port resistances
 	float** S_matrix; //square matrix representing S
 	wdfNode** downPorts; //array of ports connected to RtypeAdaptor
 	float* a_; //temp matrix of inputs to Rport
