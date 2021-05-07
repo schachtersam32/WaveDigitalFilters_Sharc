@@ -72,7 +72,7 @@ protected:
 class wdfTree //a special instance of this class is created for each circuit to be run
 {
 public:
-	wdfTree() : alpha(1.0), sr(0.0) {}
+	wdfTree() : alpha(1.0), sr(48000) {}
 	virtual ~wdfTree() {}
 
 	virtual float processSample(float inSamp) = 0; //processes tree sample by sample
@@ -254,9 +254,9 @@ private:
 	float prev_a; //storage values for incident and reflected waves
 	float fs; // sample rate needed for adaptation
 	float alpha; //alpha parameter needed for discretization
-	const float b_coef;
-	const float a1_coef;
-	const float a_coef;
+	float b_coef;
+	float a1_coef;
+	float a_coef;
 };
 
 class Inductor : public wdfNode
@@ -337,7 +337,10 @@ public:
 		a_coef = L_val * (1 + alpha) + Rp * T * alpha;
 	}
 
-	void calcImpedance() {}
+	void calcImpedance()
+	{
+		Rp = (L_val * fs * (1.0 + alpha));
+	}
 
 	void calcIncidentWave(float downSamp)
 	{
@@ -347,7 +350,7 @@ public:
 
 	float calcReflectedWave()
 	{
-		b = b_coef * b + a1_coef * prev_a + a_coef*a;
+		b = b_coef * b + a1_coef * prev_a + a_coef * a;
 		return b;
 	}
 
@@ -357,9 +360,9 @@ private:
 	float prev_a; //storage values for incident and reflected waves
 	float fs; // sample rate needed for adaptation
 	float alpha; //alpha parameter needed for discretization
-	const float b_coef;
-	const float a1_coef;
-	const float a_coef;
+	float b_coef;
+	float a1_coef;
+	float a_coef;
 };
 
 class IdealVoltageSource : public wdfNode
@@ -780,24 +783,120 @@ class RtypeAdaptor : public wdfNode
 public:
 	RtypeAdaptor(int numPorts, wdfNode** downPorts) : wdfNode("R-type Adaptor")
 	{
-		Rp = new float(numPorts);
-		a_ = new float(numPorts);
-		b_ = new float(numPorts);
-		S_matrix = new float[numPorts][numPorts];
-		for (int i = 0; i < numPorts; i++)
+		Rp_down = new float[numPorts + 1];
+		a_ = new float[numPorts + 1];
+		b_ = new float[numPorts + 1];
+		S_matrix = new float* [numPorts + 1];
+		//double duty for loop:
+		for (int i = 0; i < numPorts + 1; i++)
 		{
-			downPorts[i]->connectToNode(this);
+			S_matrix[i] = new float[numPorts + 1]; //fill out S_matrix initialization
 		}
+
+		for (int i = 0; i < numPorts; i++)
+			downPorts[i]->connectToNode(this); //connect downports to R_adaptor
+
 		calcImpedance();
+	}
+
+	~RtypeAdaptor()
+	{
+		delete Rp_down;
+		delete a_;
+		delete b_;
+		for (int i = 0; i < numPorts + 1; i++)
+			delete[] S_matrix[i];
+		delete[] S_matrix;
 	}
 
 	void calcImpedance()
 	{
+		//		for (int i = 0; i < numPorts; i++)
+		//		{
+		//			Rp_down[i] = downPorts[i]->Rp;
+		//		}
+	}
+
+	void setSMatrixData(float** S_)
+	{
+		S_matrix = S_;
+	}
+
+	float** getSMatrixData()
+	{
+		return S_matrix;
+	}
+
+	void calcIncidentWave(float downWave)
+	{
+		a_[0] = downWave;
 		for (int i = 0; i < numPorts; i++)
 		{
-			Rp[i] = downPorts[i]->Rp;
+			a_[i + 1] = downPorts[i]->b;
 		}
+
+		//matmmltf(b_, S_matrix, a_, numPorts, numPorts, 1);
+		RtypeScatter(numPorts + 1, S_matrix, a_, b_);
+
+		for (int i = 0; i < numPorts; i++)
+		{
+			downPorts[i]->calcIncidentWave(b_[i + 1]);
+		}
+		a = a_[0];
 	}
+
+	float calcReflectedWave()
+	{
+		float* S_0 = S_matrix[0];
+
+		for (int i = 0; i < numPorts; i++)
+		{
+			b += S_0[i + 1] * downPorts[i]->calcReflectedWave();
+		}
+
+		return b;
+	}
+
+
+protected:
+	int numPorts; //number of ports connected to RtypeAdaptor
+	float* Rp_down; // array of port resistances
+	float** S_matrix; //square matrix representing S
+	wdfNode** downPorts; //array of ports connected to RtypeAdaptor
+	float* a_; //temp matrix of inputs to Rport
+	float* b_; //temp matrix of outputs from Rport
+};
+
+class RootRtypeAdaptor : public wdfNode
+{
+public:
+	RootRtypeAdaptor(int numPorts, wdfNode** dP) : wdfNode("Root R-type Adaptor"), numPorts(numPorts), downPorts(dP)
+	{
+		a_ = new float[numPorts];
+		b_ = new float[numPorts];
+		S_matrix = new float* [numPorts];
+		//		downPorts = dP;
+				//double duty for loop:
+		for (int i = 0; i < numPorts; i++)
+		{
+			S_matrix[i] = new float[numPorts]; //fill out S_matrix initialization
+			downPorts[i]->connectToNode(this); //connect downports to R_adaptor
+			b_[i] = 0.0f;
+			a_[i] = 0.0f;
+		}
+		calcImpedance();
+	}
+
+	~RootRtypeAdaptor()
+	{
+		delete a_;
+		delete b_;
+		for (int i = 0; i < numPorts; i++)
+			delete[] S_matrix[i];
+		delete[] S_matrix;
+	}
+
+	void calcImpedance() {}
 
 	void setSMatrixData(float** S_)
 	{
@@ -814,34 +913,31 @@ public:
 		for (int i = 0; i < numPorts; i++)
 		{
 			a_[i] = downPorts[i]->b;
+			b_[i] = 0.0f;
 		}
 
-		//matmmltf(b_, S_matrix, a_, numPorts, numPorts, 1);
 		RtypeScatter(numPorts, S_matrix, a_, b_);
 
 		for (int i = 0; i < numPorts; i++)
 		{
 			downPorts[i]->calcIncidentWave(b_[i]);
 		}
-		a = downWave;
 	}
 
 	float calcReflectedWave()
 	{
-		float* S_0 = S_matrix[0];
-
 		for (int i = 0; i < numPorts; i++)
 		{
-			b += S_0[i] * downPorts[i]->calcReflectedWave();
+			downPorts[i]->calcReflectedWave();
 		}
 
-		return b;
+		return 0;
 	}
 protected:
 	int numPorts; //number of ports connected to RtypeAdaptor
-	float* Rp; // array of port resistances
 	float** S_matrix; //square matrix representing S
 	wdfNode** downPorts; //array of ports connected to RtypeAdaptor
+//	std::vector<wdfNode*> downPorts;
 	float* a_; //temp matrix of inputs to Rport
 	float* b_; //temp matrix of outputs from Rport
 };
@@ -863,7 +959,7 @@ public:
 
 	float calcReflectedWave()
 	{
-		b = a + 2 * connectedNode->Rp * d.Is - 2 * d.Vt * omega4(logf((connectedNode->Rp * d.Is) / d.Vt) + (a + connectedNode->Rp * d.Is) / d.Vt);
+		b = a + 2 * connectedNode->Rp * d.Is - 2 * d.Vt * d.nD * omega4(logf((connectedNode->Rp * d.Is) / (d.nD * d.Vt)) + (a + connectedNode->Rp * d.Is) / (d.nD * d.Vt));
 		return b;
 	}
 
@@ -887,7 +983,7 @@ public:
 	float calcReflectedWave()
 	{
 		float lambda = static_cast<float>(signum(a));
-		b = a + 2 * lambda * (connectedNode->Rp * d.Is - d.Vt * omega4(logf(connectedNode->Rp * d.Is / d.Vt) + (lambda * a + connectedNode->Rp * d.Is) / d.Vt));
+		b = a + 2 * lambda * (connectedNode->Rp * d.Is - d.Vt * d.nD * omega4(logf(connectedNode->Rp * d.Is / (d.nD * d.Vt)) + (lambda * a + connectedNode->Rp * d.Is) / (d.nD * d.Vt)));
 		return b;
 	}
 private:
