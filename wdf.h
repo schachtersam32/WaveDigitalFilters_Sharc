@@ -712,13 +712,9 @@ public:
 
 	void calcImpedance()
 	{
-		const float R_left = leftPort->Rp;
-		const float R_right = rightPort->Rp;
-
-		Rp = (R_left * R_right) / (R_left + R_right);
-		gammaLeft = Rp / R_left;
-		gammaRight = Rp / R_right;
-
+		Rp = (leftPort->Rp * rightPort->Rp) / (leftPort->Rp + rightPort->Rp);
+		gammaLeft = Rp / leftPort->Rp;
+		gammaRight = Rp / rightPort->Rp;
 	}
 
 	float calcReflectedWave()
@@ -751,12 +747,9 @@ public:
 
 	void calcImpedance()
 	{
-		const float R_left = leftPort->Rp;
-		const float R_right = rightPort->Rp;
-
-		Rp = R_left + R_right;
-		gammaLeft = R_left / Rp;
-		gammaRight = R_right / Rp;
+		Rp = leftPort->Rp + rightPort->Rp;
+		gammaLeft = leftPort->Rp / Rp;
+		gammaRight = rightPort->Rp / Rp;
 	}
 
 	float calcReflectedWave()
@@ -781,7 +774,7 @@ private:
 class RtypeAdaptor : public wdfNode
 {
 public:
-	RtypeAdaptor(int numPorts, wdfNode** downPorts) : wdfNode("R-type Adaptor")
+	RtypeAdaptor(int numPorts, wdfNode** downPorts) : wdfNode("R-type Adaptor"), numPorts(numPorts), downPorts(downPorts)
 	{
 		Rp_down = new float[numPorts + 1];
 		a_ = new float[numPorts + 1];
@@ -791,12 +784,12 @@ public:
 		for (int i = 0; i < numPorts + 1; i++)
 		{
 			S_matrix[i] = new float[numPorts + 1]; //fill out S_matrix initialization
+			b_[i] = 0.0f;
+			a_[i] = 0.0f;
 		}
 
 		for (int i = 0; i < numPorts; i++)
 			downPorts[i]->connectToNode(this); //connect downports to R_adaptor
-
-		calcImpedance();
 	}
 
 	~RtypeAdaptor()
@@ -809,13 +802,7 @@ public:
 		delete[] S_matrix;
 	}
 
-	void calcImpedance()
-	{
-		//		for (int i = 0; i < numPorts; i++)
-		//		{
-		//			Rp_down[i] = downPorts[i]->Rp;
-		//		}
-	}
+	void calcImpedance() {}
 
 	void setSMatrixData(float** S_)
 	{
@@ -830,12 +817,13 @@ public:
 	void calcIncidentWave(float downWave)
 	{
 		a_[0] = downWave;
+		b_[0] = 0.0f;
 		for (int i = 0; i < numPorts; i++)
 		{
 			a_[i + 1] = downPorts[i]->b;
+			b_[i + 1] = 0.0f;
 		}
 
-		//matmmltf(b_, S_matrix, a_, numPorts, numPorts, 1);
 		RtypeScatter(numPorts + 1, S_matrix, a_, b_);
 
 		for (int i = 0; i < numPorts; i++)
@@ -875,8 +863,7 @@ public:
 		a_ = new float[numPorts];
 		b_ = new float[numPorts];
 		S_matrix = new float* [numPorts];
-		//		downPorts = dP;
-				//double duty for loop:
+		//double duty for loop:
 		for (int i = 0; i < numPorts; i++)
 		{
 			S_matrix[i] = new float[numPorts]; //fill out S_matrix initialization
@@ -937,7 +924,6 @@ protected:
 	int numPorts; //number of ports connected to RtypeAdaptor
 	float** S_matrix; //square matrix representing S
 	wdfNode** downPorts; //array of ports connected to RtypeAdaptor
-//	std::vector<wdfNode*> downPorts;
 	float* a_; //temp matrix of inputs to Rport
 	float* b_; //temp matrix of outputs from Rport
 };
