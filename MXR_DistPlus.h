@@ -43,9 +43,6 @@ public:
 
 	mxrDistPlus1()
 	{
-		setSampleRate(AUDIO_SAMPLE_RATE);
-		setAlpha(1.0);
-
 		ResDistPrev = 0.0;
 
 		//Port A
@@ -81,6 +78,8 @@ public:
 		R_subTreeNodes[3] = C4;
 
 		R = new RootRtypeAdaptor(4,R_subTreeNodes);
+
+		setSMatrixData();
 	}
 
 	~mxrDistPlus1()
@@ -103,10 +102,10 @@ public:
 
 		double arr[4][4] =
 		{
-			{1 - (2*Ra*(75*Rb + 75*Rc + 75*Rd - Rb*Rd - Rc*Rd))/(75000000*Rb + 75000000*Rc + 75000000*Rd + 75*Ra*Rb + 75*Ra*Rc + 75*Ra*Rd + 75*Rb*Rc - 100999925*Rb*Rd - 1000000*Rc*Rd - Ra*Rb*Rd - Ra*Rc*Rd - Rb*Rc*Rd),                                       (2*Ra*(75*Rc + 75*Rd - Rc*Rd))/(75000000*Rb + 75000000*Rc + 75000000*Rd + 75*Ra*Rb + 75*Ra*Rc + 75*Ra*Rd + 75*Rb*Rc - 100999925*Rb*Rd - 1000000*Rc*Rd - Ra*Rb*Rd - Ra*Rc*Rd - Rb*Rc*Rd),                                             (2*Ra*(75*Rb - Rb*Rd))/(75000000*Rb + 75000000*Rc + 75000000*Rd + 75*Ra*Rb + 75*Ra*Rc + 75*Ra*Rd + 75*Rb*Rc - 100999925*Rb*Rd - 1000000*Rc*Rd - Ra*Rb*Rd - Ra*Rc*Rd - Rb*Rc*Rd),                                                                       (150*Ra*Rb)/(75000000*Rb + 75000000*Rc + 75000000*Rd + 75*Ra*Rb + 75*Ra*Rc + 75*Ra*Rd + 75*Rb*Rc - 100999925*Rb*Rd - 1000000*Rc*Rd - Ra*Rb*Rd - Ra*Rc*Rd - Rb*Rc*Rd)},
-			{             -(2*Rb*(99999925*Rd - 75*Rc + Rc*Rd))/(75000000*Rb + 75000000*Rc + 75000000*Rd + 75*Ra*Rb + 75*Ra*Rc + 75*Ra*Rd + 75*Rb*Rc - 100999925*Rb*Rd - 1000000*Rc*Rd - Ra*Rb*Rd - Ra*Rc*Rd - Rb*Rc*Rd), 1 - (2*Rb*(75*Ra + 75*Rc - 100999925*Rd - Ra*Rd - Rc*Rd + 75000000))/(75000000*Rb + 75000000*Rc + 75000000*Rd + 75*Ra*Rb + 75*Ra*Rc + 75*Ra*Rd + 75*Rb*Rc - 100999925*Rb*Rd - 1000000*Rc*Rd - Ra*Rb*Rd - Ra*Rc*Rd - Rb*Rc*Rd),                     (2*Rb*(75*Ra - 1000000*Rd - Ra*Rd + 75000000))/(75000000*Rb + 75000000*Rc + 75000000*Rd + 75*Ra*Rb + 75*Ra*Rc + 75*Ra*Rd + 75*Rb*Rc - 100999925*Rb*Rd - 1000000*Rc*Rd - Ra*Rb*Rd - Ra*Rc*Rd - Rb*Rc*Rd),                                                           (150*Rb*(Ra + 1000000))/(75000000*Rb + 75000000*Rc + 75000000*Rd + 75*Ra*Rb + 75*Ra*Rc + 75*Ra*Rd + 75*Rb*Rc - 100999925*Rb*Rd - 1000000*Rc*Rd - Ra*Rb*Rd - Ra*Rc*Rd - Rb*Rc*Rd)},
-			{             (2*Rc*(75*Rb + 100000000*Rd - Rb*Rd))/(75000000*Rb + 75000000*Rc + 75000000*Rd + 75*Ra*Rb + 75*Ra*Rc + 75*Ra*Rd + 75*Rb*Rc - 100999925*Rb*Rd - 1000000*Rc*Rd - Ra*Rb*Rd - Ra*Rc*Rd - Rb*Rc*Rd),                     (2*Rc*(75*Ra - 101000000*Rd - Ra*Rd + 75000000))/(75000000*Rb + 75000000*Rc + 75000000*Rd + 75*Ra*Rb + 75*Ra*Rc + 75*Ra*Rd + 75*Rb*Rc - 100999925*Rb*Rd - 1000000*Rc*Rd - Ra*Rb*Rd - Ra*Rc*Rd - Rb*Rc*Rd), 1 - (2*Rc*(75*Ra + 75*Rb - 1000000*Rd - Ra*Rd - Rb*Rd + 75000000))/(75000000*Rb + 75000000*Rc + 75000000*Rd + 75*Ra*Rb + 75*Ra*Rc + 75*Ra*Rd + 75*Rb*Rc - 100999925*Rb*Rd - 1000000*Rc*Rd - Ra*Rb*Rd - Ra*Rc*Rd - Rb*Rc*Rd),                                                     -(150*Rc*(Ra + Rb + 1000000))/(75000000*Rb + 75000000*Rc + 75000000*Rd + 75*Ra*Rb + 75*Ra*Rc + 75*Ra*Rd + 75*Rb*Rc - 100999925*Rb*Rd - 1000000*Rc*Rd - Ra*Rb*Rd - Ra*Rc*Rd - Rb*Rc*Rd)},
-			{                -(50*Rd*(3999997*Rb + 4000000*Rc))/(75000000*Rb + 75000000*Rc + 75000000*Rd + 75*Ra*Rb + 75*Ra*Rc + 75*Ra*Rd + 75*Rb*Rc - 100999925*Rb*Rd - 1000000*Rc*Rd - Ra*Rb*Rd - Ra*Rc*Rd - Rb*Rc*Rd),                                (50*Rd*(3*Ra + 4000000*Rc + 3000000))/(75000000*Rb + 75000000*Rc + 75000000*Rd + 75*Ra*Rb + 75*Ra*Rc + 75*Ra*Rd + 75*Rb*Rc - 100999925*Rb*Rd - 1000000*Rc*Rd - Ra*Rb*Rd - Ra*Rc*Rd - Rb*Rc*Rd),                             -(50*Rd*(3*Ra - 3999997*Rb + 3000000))/(75000000*Rb + 75000000*Rc + 75000000*Rd + 75*Ra*Rb + 75*Ra*Rc + 75*Ra*Rd + 75*Rb*Rc - 100999925*Rb*Rd - 1000000*Rc*Rd - Ra*Rb*Rd - Ra*Rc*Rd - Rb*Rc*Rd), (2*Rd*(100999925*Rb - 75*Ra + 1000000*Rc + Ra*Rb + Ra*Rc + Rb*Rc - 75000000))/(75000000*Rb + 75000000*Rc + 75000000*Rd + 75*Ra*Rb + 75*Ra*Rc + 75*Ra*Rd + 75*Rb*Rc - 100999925*Rb*Rd - 1000000*Rc*Rd - Ra*Rb*Rd - Ra*Rc*Rd - Rb*Rc*Rd) + 1}
+				{                                     1,                                0,                                0,  0},
+				{                (200*Rb)/(101*Rb + Rc),       1 - (202*Rb)/(101*Rb + Rc),             (2*Rb)/(101*Rb + Rc),  0},
+				{               -(200*Rc)/(101*Rb + Rc),           (202*Rc)/(101*Rb + Rc),         1 - (2*Rc)/(101*Rb + Rc),  0},
+				{(200*Rd*(Rb + Rc))/(101*Rb*Rd + Rc*Rd), -(200*Rc*Rd)/(101*Rb*Rd + Rc*Rd), -(200*Rb*Rd)/(101*Rb*Rd + Rc*Rd), -1}
 		};
 
 		for(int i = 0; i < 4; i++)
@@ -138,7 +137,6 @@ public:
 		}
 	}
 
-
 };
 
 class mxrDistPlus2 : public wdfTree
@@ -157,9 +155,6 @@ public:
 
 	mxrDistPlus2()
 	{
-		setSampleRate(AUDIO_SAMPLE_RATE);
-		setAlpha(1.0);
-
 		Vres = new ResistiveVoltageSource(10000.0);
 
 		ResOp = new Resistor(5000.0);
