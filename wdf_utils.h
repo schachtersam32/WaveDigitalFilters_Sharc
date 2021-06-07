@@ -9,13 +9,17 @@
 #define WDF_UTILS_H_
 
 #include <math.h>
-#define ADAA_THRESHOLD 10e-12
 #define FLT_MIN_PLUS 1.175494351e-38
-#define FLT_MIN_MINUS - 1.175494351e-38
+#define FLT_MIN_MINUS -1.175494351e-38
 
 inline bool checkUnderflow(float val)
 {
 	return ((val < FLT_MIN_PLUS) && (val > FLT_MIN_MINUS));
+}
+
+inline float knobRange(float knobVal, float minVal, float maxVal)
+{
+	return minVal + (maxVal - minVal) * knobVal;
 }
 
  // define several diode models
@@ -28,6 +32,7 @@ typedef struct
 
 DiodeModel d_1N4148 = { 25.85e-3, 2.52e-9, 1.0 };
 DiodeModel d_NSCW100 = { 25.85e-3, 16.88e-9, 9.626 };
+DiodeModel d_shockley = {25.85e-3, 2.52e-14, 1.75};
 
 
 //signum function - determines sign of input
@@ -207,7 +212,5 @@ inline void RtypeScatter(int dim, float** S_, float* a_, float* b_)
 		}
 	}
 }
-
-
 
 #endif /* WDF_UTILS_H_ */
