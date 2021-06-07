@@ -1,0 +1,13 @@
+* C:\Users\Sam S. AME\Documents\LTspiceXVII\MXR_Dist_Plus_thev.asc
+Va 4 1 V
+Vb 5 1 V
+Vd 7 1 V
+Vc 6 2 V
+Ra 4 8 Ra
+Rb 3 5 Rb
+Rd 7 2 Rd
+Rc 6 3 Rc
+R§Nor1 1 2 1
+R§Nul1 8 3 2
+.backanno
+.end

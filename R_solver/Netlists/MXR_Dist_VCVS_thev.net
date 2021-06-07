@@ -1,0 +1,12 @@
+* C:\Users\Sam S. AME\Documents\LTspiceXVII\MXR_Dist_VCVS_thev.asc
+Va N001 N004 V
+Vb N002 N004 V
+Vc N008 N006 V
+Vd N007 N004 V
+Ra N001 N003 Ra
+Rb N002 N005 Rb
+Rc N005 N008 Rc
+Rd N006 N007 Rd
+E1 N006 N004 N003 N005 100
+.backanno
+.end

@@ -1,0 +1,20 @@
+* C:\Users\Sam S. AME\Documents\LTspiceXVII\BridgeT_VCVS_Thev_ports.asc
+Va 6 5 V
+Vb 7 1 V
+Vd 9 4 V
+Ve 10 14 Ve
+Vg 12 5 V
+Vh 13 5 V
+Ra 1 6 Ra
+Rb 4 7 Rb
+Rd 9 2 Rd
+Re 10 3 Re
+Rg 3 12 Rg
+Rh 2 13 Rh
+Vf 11 3 Vf
+Rf 11 2 Rf
+Vc 8 3 V
+Rc 4 8 Rc
+E1 14 5 4 1 -100
+.backanno
+.end
