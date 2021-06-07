@@ -13,6 +13,8 @@
 #include "wdf_utils.h"
 #include <stddef.h>
 #include <stdlib.h>
+#include "common/audio_system_config.h"
+
 
 class wdfTree;
 class wdfNode;
@@ -72,13 +74,13 @@ protected:
 class wdfTree //a special instance of this class is created for each circuit to be run
 {
 public:
-	wdfTree() : alpha(1.0), sr(48000) {}
+	wdfTree() : alpha(1.0), sr(AUDIO_SAMPLE_RATE) {}
 	virtual ~wdfTree() {}
 
 	virtual float processSample(float inSamp) = 0; //processes tree sample by sample
 	virtual void setSMatrixData() {}
 
-	void setSampleRate(float SR) { sr = SR; } //set system samplerate
+	void setSampleRate(float SR) { sr = AUDIO_SAMPLE_RATE; } //set system samplerate
 	void setAlpha(float a) { alpha = a; } //set circuit alpha parameter
 protected:
 	float sr;
@@ -103,6 +105,8 @@ public:
 		propagateImpedance();
 	}
 
+	float getResistance() {return R_val;}
+
 	void calcImpedance()
 	{
 		Rp = R_val;
@@ -119,7 +123,7 @@ public:
 		return b;
 	}
 
-private:
+protected:
 	float R_val;
 };
 
@@ -141,6 +145,8 @@ public:
 		propagateImpedance();
 	}
 
+	float getResistance() {return R_val;}
+
 	void calcImpedance() {}
 
 	void calcIncidentWave(float downWave)
@@ -154,7 +160,7 @@ public:
 		return b;
 	}
 
-private:
+protected:
 	float R_val;
 };
 
@@ -178,6 +184,8 @@ public:
 		propagateImpedance();
 	}
 
+	float getCapacitance() {return C_val;}
+
 	void calcImpedance()
 	{
 		Rp = 1 / (C_val * fs * (1 + alpha));
@@ -195,8 +203,9 @@ public:
 		return b;
 	}
 
-private:
+protected:
 	float C_val;
+private:
 	float prev_a; //storage values for incident and reflected waves
 	float fs; // sample rate needed for adaptation
 	float alpha; //alpha parameter needed for discretization
@@ -226,6 +235,8 @@ public:
 		calcCoefficients();
 	}
 
+	float getCapacitance() {return C_val;}
+
 	void calcCoefficients()
 	{
 		float T = 1.0 / fs;
@@ -249,8 +260,9 @@ public:
 		return b;
 	}
 
-private:
+protected:
 	float C_val;
+private:
 	float prev_a; //storage values for incident and reflected waves
 	float fs; // sample rate needed for adaptation
 	float alpha; //alpha parameter needed for discretization
@@ -279,6 +291,8 @@ public:
 		propagateImpedance();
 	}
 
+	float getInductance() {return L_val;}
+
 	void calcImpedance()
 	{
 		Rp = (L_val * fs * (1.0 + alpha));
@@ -298,8 +312,9 @@ public:
 	}
 
 
-private:
+protected:
 	float L_val;
+private:
 	float prev_a, prev_b; //storage values for incident and reflected waves
 	float fs; // sample rate needed for adaptation
 	float alpha; //alpha parameter needed for discretization
@@ -328,6 +343,8 @@ public:
 		propagateImpedance();
 	}
 
+	float getInductance() {return L_val;}
+
 	void calcCoefficients()
 	{
 		float T = 1.0 / fs;
@@ -355,8 +372,9 @@ public:
 	}
 
 
-private:
+protected:
 	float L_val;
+private:
 	float prev_a; //storage values for incident and reflected waves
 	float fs; // sample rate needed for adaptation
 	float alpha; //alpha parameter needed for discretization
@@ -542,12 +560,27 @@ private:
 	bool switchClosed;
 };
 
-class Inverter : public wdfNode
+class TwoPortAdaptor : public wdfNode
 {
 public:
-	Inverter(wdfNode* port) : wdfNode("Inverter"), port(port)
+	TwoPortAdaptor(wdfNode* childPort, std::string type) :
+		wdfNode(type), childPort(childPort)
 	{
-		port->connectToNode(this);
+		childPort->connectToNode(this);
+	}
+
+	virtual ~TwoPortAdaptor() {}
+
+protected:
+	wdfNode* childPort;
+};
+
+
+class Inverter : public TwoPortAdaptor
+{
+public:
+	Inverter(wdfNode* childPort) : TwoPortAdaptor(childPort,"Inverter")
+	{
 		calcImpedance();
 	}
 
@@ -555,31 +588,27 @@ public:
 
 	void calcImpedance()
 	{
-		Rp = port->Rp;
+		Rp = childPort->Rp;
 	}
 
 	void calcIncidentWave(float downWave)
 	{
 		a = downWave;
-		port->calcIncidentWave(-a);
+		childPort->calcIncidentWave(-a);
 	}
 
 	float calcReflectedWave()
 	{
-		b = -port->calcReflectedWave();
+		b = -childPort->calcReflectedWave();
 		return b;
 	}
-
-private:
-	wdfNode* port;
 };
 
-class TwoPortParallel : public wdfNode
+class TwoPortParallel : public TwoPortAdaptor
 {
 public:
-	TwoPortParallel(wdfNode* port) : wdfNode("TwoPortParallel"), port(port)
+	TwoPortParallel(wdfNode* childPort) : TwoPortAdaptor(childPort, "TwoPortParallel")
 	{
-		port->connectToNode(this);
 		calcImpedance();
 	}
 
@@ -587,68 +616,63 @@ public:
 
 	void calcImpedance()
 	{
-		Rp = port->Rp;
+		Rp = childPort->Rp;
 	}
 
 	void calcIncidentWave(float downWave)
 	{
 		a = downWave;
-		port->calcIncidentWave(a);
+		childPort->calcIncidentWave(a);
 	}
 
 	float calcReflectedWave()
 	{
-		b = port->calcReflectedWave();
+		b = childPort->calcReflectedWave();
 		return b;
 	}
-
-private:
-	wdfNode* port;
 };
 
-class IdealTransformer : public wdfNode
+class IdealTransformer : public TwoPortAdaptor
 {
 public:
-	IdealTransformer(wdfNode* port, float turnRatio) : wdfNode("IdealTransformer"), port(port), turnRatio(turnRatio)
+	IdealTransformer(wdfNode* childPort, float turnRatio) : TwoPortAdaptor(childPort,"IdealTransformer"), turnRatio(turnRatio)
 	{
-		port->connectToNode(this);
 		calcImpedance();
 	}
 
 	void setTurnRatio(float n)
 	{
 		turnRatio = n;
+		calcImpedance();
 	}
 
 	void calcImpedance()
 	{
-		Rp = turnRatio * turnRatio * port->Rp;
+		Rp = turnRatio * turnRatio * childPort->Rp;
 	}
 
 	void calcIncidentWave(float downWave)
 	{
 		a = downWave;
-		port->calcIncidentWave(a / turnRatio);
+		childPort->calcIncidentWave(a / turnRatio);
 	}
 
 	float calcReflectedWave()
 	{
-		b = port->calcReflectedWave() * turnRatio;
+		b = childPort->calcReflectedWave() * turnRatio;
 		return b;
 	}
 
 private:
 	float turnRatio;
-	wdfNode* port;
 
 };
 
-class ActiveTransformer : public wdfNode
+class ActiveTransformer : public TwoPortAdaptor
 {
 public:
-	ActiveTransformer(wdfNode* port, float turn1, float turn2) : wdfNode("IdealTransformer"), port(port), turn1(turn1), turn2(turn2)
+	ActiveTransformer(wdfNode* childPort, float turn1, float turn2) : TwoPortAdaptor(childPort, "ActiveTransformer"), turn1(turn1), turn2(turn2)
 	{
-		port->connectToNode(this);
 		calcImpedance();
 	}
 
@@ -656,54 +680,54 @@ public:
 	{
 		turn1 = n1;
 		turn2 = n2;
+		calcImpedance();
 	}
 
 	void calcImpedance()
 	{
-		Rp = turn1 * turn2 * port->Rp;
+		Rp = turn1 * turn2 * childPort->Rp;
 	}
 
 	void calcIncidentWave(float downWave)
 	{
 		a = downWave;
-		port->calcIncidentWave(a / turn1);
+		childPort->calcIncidentWave(a / turn1);
 	}
 
 	float calcReflectedWave()
 	{
-		b = port->calcReflectedWave() * turn1;
+		b = childPort->calcReflectedWave() * turn1;
 		return b;
 	}
 
 private:
 	float turn1, turn2;
-	wdfNode* port;
 
 };
 
 
 
-class wdfThreePortAdaptor : public wdfNode
+class ThreePortAdaptor : public wdfNode
 {
 public:
-	wdfThreePortAdaptor(wdfNode* leftPort, wdfNode* rightPort, std::string type) :
+	ThreePortAdaptor(wdfNode* leftPort, wdfNode* rightPort, std::string type) :
 		wdfNode(type), leftPort(leftPort), rightPort(rightPort)
 	{
 		leftPort->connectToNode(this);
 		rightPort->connectToNode(this);
 	}
 
-	virtual ~wdfThreePortAdaptor() {}
+	virtual ~ThreePortAdaptor() {}
 
 protected:
 	wdfNode* leftPort;
 	wdfNode* rightPort;
 };
 
-class Parallel : public wdfThreePortAdaptor
+class Parallel : public ThreePortAdaptor
 {
 public:
-	Parallel(wdfNode* leftPort, wdfNode* rightPort) : wdfThreePortAdaptor(leftPort, rightPort, "Parallel")
+	Parallel(wdfNode* leftPort, wdfNode* rightPort) : ThreePortAdaptor(leftPort, rightPort, "Parallel")
 	{
 		calcImpedance();
 	}
@@ -717,12 +741,6 @@ public:
 		gammaRight = Rp / rightPort->Rp;
 	}
 
-	float calcReflectedWave()
-	{
-		b = gammaLeft * leftPort->calcReflectedWave() + gammaRight * rightPort->calcReflectedWave();
-		return b;
-	}
-
 	void calcIncidentWave(float downWave)
 	{
 		leftPort->calcIncidentWave(downWave + (rightPort->b - leftPort->b) * gammaRight);
@@ -731,14 +749,20 @@ public:
 		a = downWave;
 	}
 
+	float calcReflectedWave()
+	{
+		b = gammaLeft * leftPort->calcReflectedWave() + gammaRight * rightPort->calcReflectedWave();
+		return b;
+	}
+
 private:
 	float gammaLeft, gammaRight;
 };
 
-class Series : public wdfThreePortAdaptor
+class Series : public ThreePortAdaptor
 {
 public:
-	Series(wdfNode* leftPort, wdfNode* rightPort) : wdfThreePortAdaptor(leftPort, rightPort, "Series")
+	Series(wdfNode* leftPort, wdfNode* rightPort) : ThreePortAdaptor(leftPort, rightPort, "Series")
 	{
 		calcImpedance();
 	}
@@ -752,13 +776,6 @@ public:
 		gammaRight = rightPort->Rp / Rp;
 	}
 
-	float calcReflectedWave()
-	{
-		//port->calcreflectedwave = port->a
-		b = -1.0 * (leftPort->calcReflectedWave() + rightPort->calcReflectedWave());
-		return b;
-	}
-
 	void calcIncidentWave(float downWave)
 	{
 		//port->incident = port->b
@@ -767,6 +784,14 @@ public:
 
 		a = downWave;
 	}
+
+	float calcReflectedWave()
+	{
+		//port->calcreflectedwave = port->a
+		b = -1.0 * (leftPort->calcReflectedWave() + rightPort->calcReflectedWave());
+		return b;
+	}
+
 private:
 	float gammaLeft, gammaRight;
 };
@@ -776,14 +801,14 @@ class RtypeAdaptor : public wdfNode
 public:
 	RtypeAdaptor(int numPorts, wdfNode** downPorts) : wdfNode("R-type Adaptor"), numPorts(numPorts), downPorts(downPorts)
 	{
-		Rp_down = new float[numPorts + 1];
-		a_ = new float[numPorts + 1];
-		b_ = new float[numPorts + 1];
-		S_matrix = new float* [numPorts + 1];
+		Rp_down = new float[numPorts+1];
+		a_ = new float[numPorts+1];
+		b_ = new float[numPorts+1];
+		S_matrix = new float* [numPorts+1];
 		//double duty for loop:
-		for (int i = 0; i < numPorts + 1; i++)
+		for (int i = 0; i < numPorts+1; i++)
 		{
-			S_matrix[i] = new float[numPorts + 1]; //fill out S_matrix initialization
+			S_matrix[i] = new float[numPorts+1]; //fill out S_matrix initialization
 			b_[i] = 0.0f;
 			a_[i] = 0.0f;
 		}
@@ -797,7 +822,7 @@ public:
 		delete Rp_down;
 		delete a_;
 		delete b_;
-		for (int i = 0; i < numPorts + 1; i++)
+		for (int i = 0; i < numPorts+1; i++)
 			delete[] S_matrix[i];
 		delete[] S_matrix;
 	}
@@ -820,15 +845,15 @@ public:
 		b_[0] = 0.0f;
 		for (int i = 0; i < numPorts; i++)
 		{
-			a_[i + 1] = downPorts[i]->b;
-			b_[i + 1] = 0.0f;
+			a_[i+1] = downPorts[i]->b;
+			b_[i+1] = 0.0f;
 		}
 
-		RtypeScatter(numPorts + 1, S_matrix, a_, b_);
+		RtypeScatter(numPorts+1, S_matrix, a_, b_);
 
 		for (int i = 0; i < numPorts; i++)
 		{
-			downPorts[i]->calcIncidentWave(b_[i + 1]);
+			downPorts[i]->calcIncidentWave(b_[i+1]);
 		}
 		a = a_[0];
 	}
@@ -839,7 +864,7 @@ public:
 
 		for (int i = 0; i < numPorts; i++)
 		{
-			b += S_0[i + 1] * downPorts[i]->calcReflectedWave();
+			b += S_0[i+1] * downPorts[i]->calcReflectedWave();
 		}
 
 		return b;
@@ -969,7 +994,7 @@ public:
 	float calcReflectedWave()
 	{
 		float lambda = static_cast<float>(signum(a));
-		b = a + 2 * lambda * (connectedNode->Rp * d.Is - d.Vt * d.nD * omega4(logf(connectedNode->Rp * d.Is / (d.nD * d.Vt)) + (lambda * a + connectedNode->Rp * d.Is) / (d.nD * d.Vt)));
+		b = a + 2 * lambda * (connectedNode->Rp * d.Is - d.Vt * d.nD * omega4(logf(connectedNode->Rp * d.Is / (d.nD * d.Vt)) + (lambda * a + connectedNode->Rp * d.Is) /(d.nD * d.Vt)));
 		return b;
 	}
 private:
